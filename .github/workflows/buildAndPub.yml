@@ -34,25 +34,28 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          build-args: "NODE_VERSION=lts-alpine"
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
           push: true
           tags: betterweb/node:lts-alpine
+          build-args: |
+            NODE_VERSION=lts-alpine
 
       - name: current-alpine
         uses: docker/build-push-action@v3
         with:
           context: .
-          build-args: NODE_VERSION=current-alpine
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
           push: true
           tags: betterweb/node:current-alpine
+          build-args: |
+            NODE_VERSION=lts-alpine
 
       - name: latest
         uses: docker/build-push-action@v3
         with:
           context: .
-          build-args: "NODE_VERSION=latest"
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x
           push: true
           tags: betterweb/node:latest
+          build-args: |
+            NODE_VERSION=lts-alpine
