@@ -12,4 +12,6 @@ RUN if command -v apk &> /dev/null ; then apk update && apk upgrade && apk add n
 #RUN if command -v apt &> /dev/null ; then apt update -y && apt upgrade -y ; fi
 #RUN if command -v yum &> /dev/null ; then yum update -y && yum upgrade -y ; fi
 
-RUN node --version && npm --version
+RUN npm install -g pnpm
+
+RUN node --version && npm --version && pnpm --version
