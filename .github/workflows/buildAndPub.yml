@@ -29,7 +29,7 @@ jobs:
         with:
           compact: true
           input: node_versions.json
-          script: '[.[] | select((strptime("%Y-%m-%d"; .date) | mktime) > (now - (365*24*60*60)))] | map(.version)'
+          script: '[.[] | select(.version | test("v([1-9][6-9]|[2-9][0-9]).*"))] | map(.version)'
 
       - name: Set matrix for build
         run: |
