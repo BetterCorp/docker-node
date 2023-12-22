@@ -6,7 +6,7 @@ ARG NODE_VERSION=v20.0.0
 ENV PYTHONUNBUFFERED=1
 
 RUN set -eux \ 
-  && echo "Node version: $NODE_VERSION" \
+  && echo "Node version: $NODE_VERSION | NP: $(getconf _NPROCESSORS_ONLN)" \
   && addgroup -g 1000 node \
   && adduser -u 1000 -G node -s /bin/sh -D node \
   && apk add --no-cache libstdc++ \
@@ -95,8 +95,7 @@ RUN set -eux \
   && rm -rf "$GNUPGHOME" \
   && grep " node-$NODE_VERSION.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
   && tar -xf "node-$NODE_VERSION.tar.xz" \
-  && cd "node-$NODE_VERSION" \
-  && ./configure && make -j$(getconf _NPROCESSORS_ONLN) V= && make install \
+  && cd "node-$NODE_VERSION" && ./configure && make -j$(getconf _NPROCESSORS_ONLN) V= && make install \
   && apk del .build-deps-full \
   && cd .. \
   && rm -Rf "node-$NODE_VERSION" \
@@ -109,12 +108,9 @@ RUN set -eux \
   && npm --version
 
 FROM betterweb/alpine:latest
-
 COPY --from=builder /usr/local /usr/local
-
-COPY install_packages.sh /usr/local/bin/
+COPY install_packages.sh /usr/local/bin/install_packages
 COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/install_packages.sh 
+RUN chmod +x /entrypoint.sh /usr/local/bin/install_packages 
 ENTRYPOINT ["/entrypoint.sh"]
-
 CMD [ "node" ]
