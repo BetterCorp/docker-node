@@ -81,14 +81,24 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
+      - name: Parse version
+        id: parse_version
+        run: |
+          VERSION=${{ matrix.tag.version }}
+          PARSED_VERSION=${VERSION#v}
+          echo "PARSED_VERSION=$PARSED_VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Build
         uses: docker/build-push-action@v5
         with:
           build-args: |
-            NODE_VERSION=${{ matrix.tag.version }}
+            ALPINE_VERSION=3.19
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           context: .
           platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
           push: true
           tags: |
-            betterweb/node:${{matrix.tag.version}}
-            betterweb/node:v${{matrix.tag.major}}
+            betterweb/node:${{steps.parse_version.outputs.PARSED_VERSION}}
+            betterweb/node:${{matrix.tag.major}}
