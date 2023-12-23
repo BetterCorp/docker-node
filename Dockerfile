@@ -21,7 +21,8 @@ RUN apk add --no-cache ca-certificates dpkg gnupg && \
 FROM node:${NODE_VERSION}-alpine
 COPY --from=builder /usr/local/bin/gosu /usr/local/bin/gosu
 COPY install_packages.sh /usr/local/bin/install_packages
-COPY docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh /usr/local/bin/install_packages 
-ENTRYPOINT ["/entrypoint.sh"]
+RUN rm -f /usr/local/bin/docker-entrypoint.sh
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/install_packages 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD [ "node" ]
