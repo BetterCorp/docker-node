@@ -87,7 +87,7 @@ jobs:
         with:
           compact: true
           input: config.json
-          script: "{\"tag\":$(cat config.json)}"
+          script: '{"tag": . }'
 
       - run: echo 'matrix=${{ steps.reparse-tags.outputs.output }}' >> $GITHUB_OUTPUT
         id: set-matrix
