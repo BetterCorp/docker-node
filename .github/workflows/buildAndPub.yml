@@ -19,19 +19,61 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
 
-      - name: Get Docker tags
-        id: get-tags
+      - name: Check Docker image platforms
+        id: check-platforms
         run: |
-          IMAGE_NAME="library/alpine"
+          # Get Node.js versions
           curl -s "https://nodejs.org/download/release/index.json" > node_versions.json
-
-      - uses: cloudposse/github-action-jq@main
-        id: parse-tags
-        with:
-          compact: true
-          input: node_versions.json
-          #script: '[.[] | select(.version | test("v(1[8-9]|[2-9][0-9]).*"))] | map(.version) | .[0:200]'
-          script: '[.[] | select(.version | test("v(1[8-9]|[2-9][0-9]).*"))] | group_by(.version | match("v(\\d+).*").captures[0].string | tonumber) | map(max_by(.version | match("v(\\d+\\.\\d+).*").captures[0].string | split(".") as $parts | ($parts[0] | tonumber) * 1000 + ($parts[1] | tonumber))) | map({version: .version, major: (.version | match("v(\\d+).*").captures[0].string | tonumber)}) | .[0:200]'
+          
+          # Function to check Docker image platforms
+          check_platforms() {
+            version=$1
+            
+            # Get platforms from manifest
+            if manifest=$(docker manifest inspect "node:$version-alpine" 2>/dev/null); then
+              # Extract all valid platforms (excluding unknown)
+              platforms=$(echo "$manifest" | jq -r '.manifests[] | 
+                select(.platform.os != "unknown" and .platform.architecture != "unknown") |
+                if .platform.variant then
+                  "linux/" + .platform.architecture + "/" + .platform.variant
+                else
+                  "linux/" + .platform.architecture
+                end' | tr '\n' ',' | sed 's/,$//')
+              
+              if [ -n "$platforms" ]; then
+                echo "$platforms"
+                return
+              fi
+            fi
+            
+            # Default platforms if manifest check fails
+            echo "linux/amd64,linux/arm64/v8"
+          }
+          
+          # Process versions and add platform information
+          jq -c '[.[] | select(.version | test("v(1[8-9]|[2-9][0-9]).*"))] | group_by(.version | match("v(\\d+).*").captures[0].string | tonumber) | map(max_by(.version | match("v(\\d+\\.\\d+).*").captures[0].string | split(".") as $parts | ($parts[0] | tonumber) * 1000 + ($parts[1] | tonumber))) | map({version: .version, major: (.version | match("v(\\d+).*").captures[0].string | tonumber)})' node_versions.json > versions.json
+          
+          # Add platform information to each version
+          platforms_json="["
+          first=true
+          
+          while IFS= read -r version_info; do
+            version=$(echo "$version_info" | jq -r '.version')
+            major=$(echo "$version_info" | jq -r '.major')
+            version_without_v="${version#v}"  # Remove 'v' prefix for Docker tag
+            platforms=$(check_platforms "$version_without_v")
+            
+            if [ "$first" = true ]; then
+              first=false
+            else
+              platforms_json="$platforms_json,"
+            fi
+            
+            platforms_json="$platforms_json{\"version\":\"$version\",\"major\":$major,\"platforms\":\"$platforms\"}"
+          done < <(jq -c '.[]' versions.json)
+          platforms_json="$platforms_json]"
+          
+          echo "$platforms_json" > config.json
 
       - uses: cloudposse/github-action-jq@main
         id: latest-version
@@ -40,16 +82,12 @@ jobs:
           input: node_versions.json
           script: 'map(select(.version | startswith("v20"))) | max_by(.version) | .version'
 
-      - name: Set matrix for build
-        run: |
-          echo '{"tag": ${{ steps.parse-tags.outputs.output }}}' >> config.json
-
       - uses: cloudposse/github-action-jq@main
         id: reparse-tags
         with:
           compact: true
           input: config.json
-          script: "."
+          script: "{\"tag\":$(cat config.json)}"
 
       - run: echo 'matrix=${{ steps.reparse-tags.outputs.output }}' >> $GITHUB_OUTPUT
         id: set-matrix
@@ -96,7 +134,7 @@ jobs:
             NODE_MAJOR=${{ matrix.tag.major }}
             NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           context: .
-          platforms: linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64/v8
+          platforms: ${{ matrix.tag.platforms }}
           push: true
           tags: |
             betterweb/node:${{steps.parse_version.outputs.PARSED_VERSION}}
