@@ -15,6 +15,8 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       latest: ${{ steps.latest-version.outputs.matrix }}
+      devcontainer_matrix: ${{ steps.prepare-dev-matrix.outputs.matrix }}
+      devcontainer_matrix: ${{ steps.prepare-dev-matrix.outputs.matrix }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
@@ -96,6 +98,13 @@ jobs:
       - run: echo 'matrix=${{ steps.reparse-tags.outputs.output }}' >> $GITHUB_OUTPUT
         id: set-matrix
 
+      - name: Prepare devcontainer matrix
+        id: prepare-dev-matrix
+        run: |
+          # Only keep the highest version of the last 3 major versions for devcontainers
+          jq '[. | sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[:3]]' config.json > devcontainer_matrix.json
+          echo "matrix=$(jq -c '{"tag": .}' devcontainer_matrix.json)" >> $GITHUB_OUTPUT
+
   build:
     needs: prepare-matrix
     runs-on: ubuntu-latest
@@ -151,7 +160,7 @@ jobs:
     needs: prepare-matrix
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     env:
       LATEST_VERSION: ${{ needs.prepare-matrix.outputs.latest }}
     steps:
