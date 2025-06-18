@@ -1,10 +1,15 @@
-FROM betterweb/node:latest
+ARG NODE_MAJOR=22
+ARG NODE_VERSION=22.0.0
+FROM node:${NODE_VERSION}-bookworm
 
 # Install common dev tools
 RUN apt-get update && apt-get install -y \
     sudo \
     git \
     curl \
+    make \
+    g++ \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Add a non-root user for VSCode/Cursor

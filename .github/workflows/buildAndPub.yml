@@ -144,8 +144,12 @@ jobs:
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:latest' || '' }}
 
   build-devcontainers:
-    needs: build
+    needs: prepare-matrix
     runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
+    env:
+      LATEST_VERSION: ${{ needs.prepare-matrix.outputs.latest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -159,11 +163,33 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
+      - name: Parse version
+        id: parse_version
+        run: |
+          VERSION=${{ matrix.tag.version }}
+          PARSED_VERSION=${VERSION#v}
+          echo "PARSED_VERSION=$PARSED_VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Is Latest
+        id: is_latest
+        run: |
+          if [ "${{ matrix.tag.version }}" = "${{ env.LATEST_VERSION }}" ]; then
+            echo "IS_LATEST=true" >> $GITHUB_OUTPUT
+          else
+            echo "IS_LATEST=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push devcontainer image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile.devcontainer
           push: true
+          build-args: |
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           tags: |
-            betterweb/node:devcontainer-latest
+            betterweb/node:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
+            betterweb/node:devcontainer-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:devcontainer-latest' || '' }}
