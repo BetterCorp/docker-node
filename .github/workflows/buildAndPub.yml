@@ -102,7 +102,7 @@ jobs:
         with:
           compact: true
           input: config.json
-          script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[:3]'
+          script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[:3] | {"tag": . }'
 
       - run: echo 'matrix=${{ steps.reparse-dev-tags.outputs.output }}' >> $GITHUB_OUTPUT
         id: set-dev-matrix
