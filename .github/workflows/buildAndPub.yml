@@ -97,6 +97,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
+    env:
+      LATEST_VERSION: ${{ needs.prepare-matrix.outputs.latest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -139,3 +141,4 @@ jobs:
           tags: |
             betterweb/node:${{steps.parse_version.outputs.PARSED_VERSION}}
             betterweb/node:${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:latest' || '' }}
