@@ -15,7 +15,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       latest: ${{ steps.latest-version.outputs.matrix }}
-      devcontainer_matrix: ${{ steps.prepare-dev-matrix.outputs.matrix }}
+      devcontainer_matrix: ${{ steps.set-dev-matrix.outputs.matrix }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@master
