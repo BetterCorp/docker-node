@@ -83,6 +83,7 @@ jobs:
         id: latest-version
         with:
           compact: true
+          raw-output: true
           input: config.json
           script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[0].version'
 
@@ -147,8 +148,10 @@ jobs:
         run: |
           if [ "${{ matrix.tag.version }}" = "${{ needs.prepare-matrix.outputs.latest }}" ]; then
             echo "IS_LATEST=true" >> $GITHUB_OUTPUT
+            echo "This is the latest version"
           else
             echo "IS_LATEST=false" >> $GITHUB_OUTPUT
+            echo "This is not the latest version"
           fi
 
       - name: Build
@@ -196,8 +199,10 @@ jobs:
         run: |
           if [ "${{ matrix.tag.version }}" = "${{ needs.prepare-matrix.outputs.latest }}" ]; then
             echo "IS_LATEST=true" >> $GITHUB_OUTPUT
+            echo "This is the latest version"
           else
             echo "IS_LATEST=false" >> $GITHUB_OUTPUT
+            echo "This is not the latest version"
           fi
 
       - name: Build and push devcontainer image
