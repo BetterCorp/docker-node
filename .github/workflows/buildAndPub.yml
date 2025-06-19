@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      latest: ${{ steps.latest-version.outputs.matrix }}
+      latest: ${{ steps.latest-version.outputs.output }}
       devcontainer_matrix: ${{ steps.set-dev-matrix.outputs.matrix }}
     steps:
       - name: Set up Docker Buildx
