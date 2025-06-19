@@ -83,8 +83,8 @@ jobs:
         id: latest-version
         with:
           compact: true
-          input: node_versions.json
-          script: 'map(select(.version | startswith("v20"))) | max_by(.version) | .version'
+          input: config.json
+          script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[0].version'
 
       - uses: cloudposse/github-action-jq@main
         id: reparse-tags
@@ -112,8 +112,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
-    env:
-      LATEST_VERSION: ${{ needs.prepare-matrix.outputs.latest }}
 
     steps:
       - uses: actions/checkout@v4
@@ -147,7 +145,7 @@ jobs:
       - name: Is Latest
         id: is_latest
         run: |
-          if [ "${{ matrix.tag.version }}" = "${{ env.LATEST_VERSION }}" ]; then
+          if [ "${{ matrix.tag.version }}" = "${{ needs.prepare-matrix.outputs.latest }}" ]; then
             echo "IS_LATEST=true" >> $GITHUB_OUTPUT
           else
             echo "IS_LATEST=false" >> $GITHUB_OUTPUT
@@ -172,8 +170,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
-    env:
-      LATEST_VERSION: ${{ needs.prepare-matrix.outputs.latest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -198,7 +194,7 @@ jobs:
       - name: Is Latest
         id: is_latest
         run: |
-          if [ "${{ matrix.tag.version }}" = "${{ env.LATEST_VERSION }}" ]; then
+          if [ "${{ matrix.tag.version }}" = "${{ needs.prepare-matrix.outputs.latest }}" ]; then
             echo "IS_LATEST=true" >> $GITHUB_OUTPUT
           else
             echo "IS_LATEST=false" >> $GITHUB_OUTPUT
