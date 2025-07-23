@@ -1,0 +1,24 @@
+ARG NODE_MAJOR=22
+ARG NODE_VERSION=22.0.0
+FROM betterweb/node:${NODE_VERSION}
+
+# Install Docker
+RUN apk add --no-cache \
+    docker \
+    docker-compose \
+    && rm -rf /var/cache/apk/*
+
+# Create docker group and add node user
+RUN addgroup -g 999 docker || true \
+    && adduser node docker || true
+
+# Install Docker Compose
+RUN apk add --no-cache py3-pip \
+    && pip3 install docker-compose \
+    && rm -rf /var/cache/apk/*
+
+USER node
+
+# Start dockerd in the background and run the original entrypoint
+ENTRYPOINT ["/bin/sh", "-c", "sudo dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 & exec /usr/local/bin/docker-entrypoint.sh \"$@\"", "--"]
+CMD [ "node" ]
