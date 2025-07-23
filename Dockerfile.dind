@@ -12,10 +12,7 @@ RUN apk add --no-cache \
 RUN addgroup -g 999 docker || true \
     && adduser node docker || true
 
-# Install Docker Compose
-RUN apk add --no-cache py3-pip \
-    && pip3 install docker-compose \
-    && rm -rf /var/cache/apk/*
+# Docker Compose is already installed as docker-cli-compose
 
 USER node
 
