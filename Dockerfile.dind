@@ -17,5 +17,5 @@ RUN addgroup -g 999 docker || true \
 USER node
 
 # Start dockerd in the background and run the original entrypoint
-ENTRYPOINT ["/bin/sh", "-c", "sudo dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 & exec /usr/local/bin/docker-entrypoint.sh \"$@\"", "--"]
+ENTRYPOINT ["/bin/sh", "-c", "dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 & exec /usr/local/bin/docker-entrypoint.sh \"$@\"", "--"]
 CMD [ "node" ]
