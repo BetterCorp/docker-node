@@ -26,7 +26,55 @@ Better Node.js Docker images with multiple specialized variants for different de
 
 ## Usage
 
-### Basic Node.js Application
+### Running from Command Line
+
+#### Basic Node.js Container
+```bash
+# Run latest Node.js version
+docker run -it betterweb/node:latest
+
+# Run specific version
+docker run -it betterweb/node:24
+
+# Run with mounted volume for development
+docker run -it -v $(pwd):/app -w /app betterweb/node:24 npm start
+
+# Run with port mapping
+docker run -it -p 3000:3000 -v $(pwd):/app -w /app betterweb/node:24 node server.js
+```
+
+#### Development Container
+```bash
+# Interactive development environment
+docker run -it -v $(pwd):/app -w /app betterweb/node:dev-24 bash
+
+# Install packages with native dependencies
+docker run -it -v $(pwd):/app -w /app betterweb/node:dev-24 install_packages "bcrypt sharp"
+
+# Run development server with live reload
+docker run -it -p 3000:3000 -v $(pwd):/app -w /app betterweb/node:dev-24 npm run dev
+```
+
+#### Docker-in-Docker Container
+```bash
+# Run with Docker socket access (Linux/macOS)
+docker run -it --privileged -v /var/run/docker.sock:/var/run/docker.sock betterweb/node:dind-24 bash
+
+# Run CI/CD pipeline
+docker run -it --privileged -v $(pwd):/app -w /app betterweb/node:dind-24 npm test
+```
+
+#### DevContainer Usage
+```bash
+# Interactive DevContainer environment
+docker run -it -v $(pwd):/workspace -w /workspace betterweb/node:devcontainer-24 bash
+
+# With VS Code DevContainer extension (use in .devcontainer/devcontainer.json)
+```
+
+### Dockerfile Examples
+
+#### Basic Node.js Application
 ```dockerfile
 FROM betterweb/node:24
 WORKDIR /app
