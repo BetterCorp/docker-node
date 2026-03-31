@@ -11,7 +11,7 @@ on:
 
 jobs:
   prepare-matrix:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       latest: ${{ steps.latest-version.outputs.output }}
@@ -110,7 +110,7 @@ jobs:
 
   build:
     needs: prepare-matrix
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
 
@@ -170,7 +170,7 @@ jobs:
 
   build-dev:
     needs: [prepare-matrix, build]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
@@ -221,7 +221,7 @@ jobs:
 
   build-devcontainers:
     needs: prepare-matrix
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
@@ -272,7 +272,7 @@ jobs:
 
   build-dind:
     needs: [prepare-matrix, build]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
