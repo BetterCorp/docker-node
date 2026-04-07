@@ -2,7 +2,7 @@ ARG NODE_MAJOR=22
 ARG NODE_VERSION=22.0.0
 FROM node:${NODE_VERSION}-alpine AS builder
 
-ENV GOSU_VERSION 1.17
+ENV GOSU_VERSION=1.17
 
 RUN apk add --no-cache ca-certificates dpkg gnupg && \
     dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')" && \
