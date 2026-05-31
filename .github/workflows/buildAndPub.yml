@@ -483,8 +483,9 @@ jobs:
           TAG="build-${{ github.run_number }}"
           TITLE="Build #${{ github.run_number }} — node ${{ needs.prepare-matrix.outputs.latest }}"
           # Drop existing release+tag if re-running the same workflow.
-          gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+          gh release delete "$TAG" -y --cleanup-tag --repo "${{ github.repository }}" 2>/dev/null || true
           gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
             --title "$TITLE" \
             --notes "Auto-generated manifest of betterweb/node multi-arch builds. Fetch latest via: https://github.com/${{ github.repository }}/releases/latest/download/manifest.json" \
             --latest \
