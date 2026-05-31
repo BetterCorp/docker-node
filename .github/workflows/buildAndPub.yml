@@ -9,6 +9,9 @@ on:
     branches:
       - "main"
 
+permissions:
+  contents: write
+
 jobs:
   prepare-matrix:
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -36,7 +39,7 @@ jobs:
               # Get platforms from manifest
               if manifest=$(docker manifest inspect "node:$version-alpine" 2>/dev/null); then
                   # Extract all valid platforms (excluding unknown)
-                  platforms=$(echo "$manifest" | jq -r '.manifests[] | 
+                  platforms=$(echo "$manifest" | jq -r '.manifests[] |
                           select(.platform.os != "unknown" and .platform.architecture != "unknown") |
                           if .platform.variant then
                             "linux/" + .platform.architecture + "/" + .platform.variant
@@ -155,6 +158,7 @@ jobs:
           fi
 
       - name: Build
+        id: build_image
         uses: docker/build-push-action@v7
         with:
           build-args: |
@@ -167,6 +171,31 @@ jobs:
             betterweb/node:${{steps.parse_version.outputs.PARSED_VERSION}}
             betterweb/node:${{matrix.tag.major}}
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:latest' || '' }}
+
+      - name: Write manifest part
+        run: |
+          TAGS=$(jq -nc \
+            --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --arg m "${{ matrix.tag.major }}" \
+            --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
+            '[("betterweb/node:" + $v), ("betterweb/node:" + $m)] + (if $latest == "true" then ["betterweb/node:latest"] else [] end)')
+          PLATFORMS=$(echo "${{ matrix.tag.platforms }}" | jq -Rc 'split(",")')
+          jq -n \
+            --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --argjson major ${{ matrix.tag.major }} \
+            --arg variant "base" \
+            --argjson platforms "$PLATFORMS" \
+            --argjson tags "$TAGS" \
+            --arg digest "${{ steps.build_image.outputs.digest }}" \
+            --argjson is_latest ${{ steps.is_latest.outputs.IS_LATEST }} \
+            '{version:$version, major:$major, variant:$variant, platforms:$platforms, tags:$tags, digest:$digest, is_latest:$is_latest}' \
+            > part.json
+          cat part.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest-part-base-${{ matrix.tag.major }}
+          path: part.json
 
   build-dev:
     needs: [prepare-matrix, build]
@@ -206,6 +235,7 @@ jobs:
           fi
 
       - name: Build and push dev image
+        id: build_image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -218,6 +248,30 @@ jobs:
             betterweb/node:dev-${{steps.parse_version.outputs.PARSED_VERSION}}
             betterweb/node:dev-${{matrix.tag.major}}
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:dev' || '' }}
+
+      - name: Write manifest part
+        run: |
+          TAGS=$(jq -nc \
+            --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --arg m "${{ matrix.tag.major }}" \
+            --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
+            '[("betterweb/node:dev-" + $v), ("betterweb/node:dev-" + $m)] + (if $latest == "true" then ["betterweb/node:dev"] else [] end)')
+          jq -n \
+            --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --argjson major ${{ matrix.tag.major }} \
+            --arg variant "dev" \
+            --argjson platforms '["linux/amd64"]' \
+            --argjson tags "$TAGS" \
+            --arg digest "${{ steps.build_image.outputs.digest }}" \
+            --argjson is_latest ${{ steps.is_latest.outputs.IS_LATEST }} \
+            '{version:$version, major:$major, variant:$variant, platforms:$platforms, tags:$tags, digest:$digest, is_latest:$is_latest}' \
+            > part.json
+          cat part.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest-part-dev-${{ matrix.tag.major }}
+          path: part.json
 
   build-devcontainers:
     needs: prepare-matrix
@@ -257,6 +311,7 @@ jobs:
           fi
 
       - name: Build and push devcontainer image
+        id: build_image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -269,6 +324,30 @@ jobs:
             betterweb/node:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
             betterweb/node:devcontainer-${{matrix.tag.major}}
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:devcontainer-latest' || '' }}
+
+      - name: Write manifest part
+        run: |
+          TAGS=$(jq -nc \
+            --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --arg m "${{ matrix.tag.major }}" \
+            --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
+            '[("betterweb/node:devcontainer-" + $v), ("betterweb/node:devcontainer-" + $m)] + (if $latest == "true" then ["betterweb/node:devcontainer-latest"] else [] end)')
+          jq -n \
+            --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --argjson major ${{ matrix.tag.major }} \
+            --arg variant "devcontainer" \
+            --argjson platforms '["linux/amd64"]' \
+            --argjson tags "$TAGS" \
+            --arg digest "${{ steps.build_image.outputs.digest }}" \
+            --argjson is_latest ${{ steps.is_latest.outputs.IS_LATEST }} \
+            '{version:$version, major:$major, variant:$variant, platforms:$platforms, tags:$tags, digest:$digest, is_latest:$is_latest}' \
+            > part.json
+          cat part.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest-part-devcontainer-${{ matrix.tag.major }}
+          path: part.json
 
   build-dind:
     needs: [prepare-matrix, build]
@@ -308,6 +387,7 @@ jobs:
           fi
 
       - name: Build and push dind image
+        id: build_image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -320,3 +400,92 @@ jobs:
             betterweb/node:dind-${{steps.parse_version.outputs.PARSED_VERSION}}
             betterweb/node:dind-${{matrix.tag.major}}
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:dind-latest' || '' }}
+
+      - name: Write manifest part
+        run: |
+          TAGS=$(jq -nc \
+            --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --arg m "${{ matrix.tag.major }}" \
+            --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
+            '[("betterweb/node:dind-" + $v), ("betterweb/node:dind-" + $m)] + (if $latest == "true" then ["betterweb/node:dind-latest"] else [] end)')
+          jq -n \
+            --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
+            --argjson major ${{ matrix.tag.major }} \
+            --arg variant "dind" \
+            --argjson platforms '["linux/amd64"]' \
+            --argjson tags "$TAGS" \
+            --arg digest "${{ steps.build_image.outputs.digest }}" \
+            --argjson is_latest ${{ steps.is_latest.outputs.IS_LATEST }} \
+            '{version:$version, major:$major, variant:$variant, platforms:$platforms, tags:$tags, digest:$digest, is_latest:$is_latest}' \
+            > part.json
+          cat part.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest-part-dind-${{ matrix.tag.major }}
+          path: part.json
+
+  publish-manifest:
+    needs: [prepare-matrix, build, build-dev, build-devcontainers, build-dind]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: manifest-part-*
+          merge-multiple: true
+          path: parts/
+
+      - name: Merge manifest parts
+        run: |
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LATEST_VERSION="${{ needs.prepare-matrix.outputs.latest }}"
+          LATEST_VERSION_STRIPPED="${LATEST_VERSION#v}"
+
+          jq -s \
+            --arg ts "$TIMESTAMP" \
+            --arg latest "$LATEST_VERSION_STRIPPED" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg run_number "${{ github.run_number }}" \
+            --arg sha "${{ github.sha }}" \
+            '{
+              build: {
+                run_id: ($run_id | tonumber),
+                run_number: ($run_number | tonumber),
+                sha: $sha,
+                timestamp: $ts
+              },
+              latest: $latest,
+              builds: (
+                group_by(.version)
+                | map({
+                    version: .[0].version,
+                    major: .[0].major,
+                    is_latest: .[0].is_latest,
+                    platforms: (map(.platforms) | add | unique),
+                    variants: (
+                      map({(.variant): {tags: .tags, platforms: .platforms, digest: .digest}}) | add
+                    )
+                  })
+                | sort_by(.major) | reverse
+              )
+            }' parts/*.json > manifest.json
+          cat manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manifest
+          path: manifest.json
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          TITLE="Build #${{ github.run_number }} — node ${{ needs.prepare-matrix.outputs.latest }}"
+          # Drop existing release+tag if re-running the same workflow.
+          gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes "Auto-generated manifest of betterweb/node multi-arch builds. Fetch latest via: https://github.com/${{ github.repository }}/releases/latest/download/manifest.json" \
+            --latest \
+            manifest.json
