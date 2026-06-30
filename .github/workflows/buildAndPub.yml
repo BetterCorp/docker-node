@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+env:
+  DOCKERHUB_IMAGE: betterweb/node
+  FORGEJO_IMAGE: code.bettercorp.dev/bettercorp/docker-node
+
 jobs:
   prepare-matrix:
     runs-on: blacksmith-2vcpu-ubuntu-2404
@@ -131,11 +135,12 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to DockerHub
+      - name: Login to Forgejo
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: code.bettercorp.dev
+          username: ${{ secrets.BC_CODE_USER }}
+          password: ${{ secrets.BC_CODE_PACKAGE_TOKEN }}
           logout: true
 
       - name: Parse version
@@ -157,7 +162,7 @@ jobs:
             echo "This is not the latest version"
           fi
 
-      - name: Build
+      - name: Build and push to Forgejo
         id: build_image
         uses: docker/build-push-action@v7
         with:
@@ -168,9 +173,32 @@ jobs:
           platforms: ${{ matrix.tag.platforms }}
           push: true
           tags: |
-            betterweb/node:${{steps.parse_version.outputs.PARSED_VERSION}}
-            betterweb/node:${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:latest' || '' }}
+            ${{ env.FORGEJO_IMAGE }}:${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.FORGEJO_IMAGE }}:${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:latest', env.FORGEJO_IMAGE) || '' }}
+
+      - name: Login to DockerHub
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          logout: true
+
+      - name: Build and push to DockerHub
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        with:
+          build-args: |
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
+          context: .
+          platforms: ${{ matrix.tag.platforms }}
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_IMAGE }}:${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.DOCKERHUB_IMAGE }}:${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
 
       - name: Write manifest part
         run: |
@@ -178,7 +206,9 @@ jobs:
             --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --arg m "${{ matrix.tag.major }}" \
             --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
-            '[("betterweb/node:" + $v), ("betterweb/node:" + $m)] + (if $latest == "true" then ["betterweb/node:latest"] else [] end)')
+            --arg dockerhub "${{ env.DOCKERHUB_IMAGE }}" \
+            --arg forgejo "${{ env.FORGEJO_IMAGE }}" \
+            '[($dockerhub + ":" + $v), ($dockerhub + ":" + $m), ($forgejo + ":" + $v), ($forgejo + ":" + $m)] + (if $latest == "true" then [($dockerhub + ":latest"), ($forgejo + ":latest")] else [] end)')
           PLATFORMS=$(echo "${{ matrix.tag.platforms }}" | jq -Rc 'split(",")')
           jq -n \
             --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
@@ -208,11 +238,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to DockerHub
+      - name: Login to Forgejo
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: code.bettercorp.dev
+          username: ${{ secrets.BC_CODE_USER }}
+          password: ${{ secrets.BC_CODE_PACKAGE_TOKEN }}
           logout: true
 
       - name: Parse version
@@ -234,8 +265,32 @@ jobs:
             echo "This is not the latest version"
           fi
 
-      - name: Build and push dev image
+      - name: Build and push dev image to Forgejo
         id: build_image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.dev
+          push: true
+          build-args: |
+            BASE_IMAGE=${{ env.FORGEJO_IMAGE }}
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
+          tags: |
+            ${{ env.FORGEJO_IMAGE }}:dev-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.FORGEJO_IMAGE }}:dev-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dev', env.FORGEJO_IMAGE) || '' }}
+
+      - name: Login to DockerHub
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          logout: true
+
+      - name: Build and push dev image to DockerHub
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -245,9 +300,9 @@ jobs:
             NODE_MAJOR=${{ matrix.tag.major }}
             NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           tags: |
-            betterweb/node:dev-${{steps.parse_version.outputs.PARSED_VERSION}}
-            betterweb/node:dev-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:dev' || '' }}
+            ${{ env.DOCKERHUB_IMAGE }}:dev-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.DOCKERHUB_IMAGE }}:dev-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dev', env.DOCKERHUB_IMAGE) || '' }}
 
       - name: Write manifest part
         run: |
@@ -255,7 +310,9 @@ jobs:
             --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --arg m "${{ matrix.tag.major }}" \
             --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
-            '[("betterweb/node:dev-" + $v), ("betterweb/node:dev-" + $m)] + (if $latest == "true" then ["betterweb/node:dev"] else [] end)')
+            --arg dockerhub "${{ env.DOCKERHUB_IMAGE }}" \
+            --arg forgejo "${{ env.FORGEJO_IMAGE }}" \
+            '[($dockerhub + ":dev-" + $v), ($dockerhub + ":dev-" + $m), ($forgejo + ":dev-" + $v), ($forgejo + ":dev-" + $m)] + (if $latest == "true" then [($dockerhub + ":dev"), ($forgejo + ":dev")] else [] end)')
           jq -n \
             --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --argjson major ${{ matrix.tag.major }} \
@@ -284,11 +341,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to DockerHub
+      - name: Login to Forgejo
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: code.bettercorp.dev
+          username: ${{ secrets.BC_CODE_USER }}
+          password: ${{ secrets.BC_CODE_PACKAGE_TOKEN }}
           logout: true
 
       - name: Parse version
@@ -310,7 +368,7 @@ jobs:
             echo "This is not the latest version"
           fi
 
-      - name: Build and push devcontainer image
+      - name: Build and push devcontainer image to Forgejo
         id: build_image
         uses: docker/build-push-action@v7
         with:
@@ -321,9 +379,32 @@ jobs:
             NODE_MAJOR=${{ matrix.tag.major }}
             NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           tags: |
-            betterweb/node:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
-            betterweb/node:devcontainer-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:devcontainer-latest' || '' }}
+            ${{ env.FORGEJO_IMAGE }}:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.FORGEJO_IMAGE }}:devcontainer-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:devcontainer-latest', env.FORGEJO_IMAGE) || '' }}
+
+      - name: Login to DockerHub
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          logout: true
+
+      - name: Build and push devcontainer image to DockerHub
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.devcontainer
+          push: true
+          build-args: |
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
+          tags: |
+            ${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:devcontainer-latest', env.DOCKERHUB_IMAGE) || '' }}
 
       - name: Write manifest part
         run: |
@@ -331,7 +412,9 @@ jobs:
             --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --arg m "${{ matrix.tag.major }}" \
             --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
-            '[("betterweb/node:devcontainer-" + $v), ("betterweb/node:devcontainer-" + $m)] + (if $latest == "true" then ["betterweb/node:devcontainer-latest"] else [] end)')
+            --arg dockerhub "${{ env.DOCKERHUB_IMAGE }}" \
+            --arg forgejo "${{ env.FORGEJO_IMAGE }}" \
+            '[($dockerhub + ":devcontainer-" + $v), ($dockerhub + ":devcontainer-" + $m), ($forgejo + ":devcontainer-" + $v), ($forgejo + ":devcontainer-" + $m)] + (if $latest == "true" then [($dockerhub + ":devcontainer-latest"), ($forgejo + ":devcontainer-latest")] else [] end)')
           jq -n \
             --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --argjson major ${{ matrix.tag.major }} \
@@ -360,11 +443,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to DockerHub
+      - name: Login to Forgejo
         uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          registry: code.bettercorp.dev
+          username: ${{ secrets.BC_CODE_USER }}
+          password: ${{ secrets.BC_CODE_PACKAGE_TOKEN }}
           logout: true
 
       - name: Parse version
@@ -386,8 +470,32 @@ jobs:
             echo "This is not the latest version"
           fi
 
-      - name: Build and push dind image
+      - name: Build and push dind image to Forgejo
         id: build_image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.dind
+          push: true
+          build-args: |
+            BASE_IMAGE=${{ env.FORGEJO_IMAGE }}
+            NODE_MAJOR=${{ matrix.tag.major }}
+            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
+          tags: |
+            ${{ env.FORGEJO_IMAGE }}:dind-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.FORGEJO_IMAGE }}:dind-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dind-latest', env.FORGEJO_IMAGE) || '' }}
+
+      - name: Login to DockerHub
+        continue-on-error: true
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          logout: true
+
+      - name: Build and push dind image to DockerHub
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -397,9 +505,9 @@ jobs:
             NODE_MAJOR=${{ matrix.tag.major }}
             NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
           tags: |
-            betterweb/node:dind-${{steps.parse_version.outputs.PARSED_VERSION}}
-            betterweb/node:dind-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && 'betterweb/node:dind-latest' || '' }}
+            ${{ env.DOCKERHUB_IMAGE }}:dind-${{steps.parse_version.outputs.PARSED_VERSION}}
+            ${{ env.DOCKERHUB_IMAGE }}:dind-${{matrix.tag.major}}
+            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dind-latest', env.DOCKERHUB_IMAGE) || '' }}
 
       - name: Write manifest part
         run: |
@@ -407,7 +515,9 @@ jobs:
             --arg v "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --arg m "${{ matrix.tag.major }}" \
             --arg latest "${{ steps.is_latest.outputs.IS_LATEST }}" \
-            '[("betterweb/node:dind-" + $v), ("betterweb/node:dind-" + $m)] + (if $latest == "true" then ["betterweb/node:dind-latest"] else [] end)')
+            --arg dockerhub "${{ env.DOCKERHUB_IMAGE }}" \
+            --arg forgejo "${{ env.FORGEJO_IMAGE }}" \
+            '[($dockerhub + ":dind-" + $v), ($dockerhub + ":dind-" + $m), ($forgejo + ":dind-" + $v), ($forgejo + ":dind-" + $m)] + (if $latest == "true" then [($dockerhub + ":dind-latest"), ($forgejo + ":dind-latest")] else [] end)')
           jq -n \
             --arg version "${{ steps.parse_version.outputs.PARSED_VERSION }}" \
             --argjson major ${{ matrix.tag.major }} \

@@ -1,6 +1,7 @@
 ARG NODE_MAJOR=22
 ARG NODE_VERSION=22.0.0
-FROM betterweb/node:${NODE_VERSION}
+ARG BASE_IMAGE=betterweb/node
+FROM ${BASE_IMAGE}:${NODE_VERSION}
 
 # Install Docker
 RUN apk add --no-cache \
