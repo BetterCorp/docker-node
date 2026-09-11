@@ -10,7 +10,7 @@ on:
       - "main"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   DOCKERHUB_IMAGE: betterweb/node
@@ -21,104 +21,22 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      latest: ${{ steps.latest-version.outputs.output }}
-      devcontainer_matrix: ${{ steps.set-dev-matrix.outputs.matrix }}
+      latest: ${{ steps.set-matrix.outputs.latest }}
+      devcontainer_matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Check Docker image platforms
-        id: check-platforms
-        run: |
-          curl -s "https://nodejs.org/download/release/index.json" >node_versions.json
-
-          # Filter out versions older than 2 years
-          two_years_ago=$(date -u -d "2 years ago" +%s)
-          jq --argjson two_years_ago "$two_years_ago" '[.[] | select((.date | sub("T.*"; "") | strptime("%Y-%m-%d") | mktime) > $two_years_ago)]' node_versions.json >node_versions_recent.json
-
-          # Function to check Docker image platforms
-          check_platforms() {
-              version=$1
-
-              # Get platforms from manifest
-              if manifest=$(docker manifest inspect "node:$version-alpine" 2>/dev/null); then
-                  # Extract all valid platforms (excluding unknown)
-                  platforms=$(echo "$manifest" | jq -r '.manifests[] |
-                          select(.platform.os != "unknown" and .platform.architecture != "unknown") |
-                          if .platform.variant then
-                            "linux/" + .platform.architecture + "/" + .platform.variant
-                          else
-                            "linux/" + .platform.architecture
-                          end' | tr '\n' ',' | sed 's/,$//')
-
-                  if [ -n "$platforms" ]; then
-                      echo "$platforms"
-                      return
-                  fi
-              fi
-
-              # Default platforms if manifest check fails
-              echo "linux/amd64,linux/arm64/v8"
-          }
-
-          # Process versions and add platform information (using filtered recent versions)
-          jq -c '[.[] | select(.version | test("v(1[8-9]|[2-9][0-9]).*"))] | group_by(.version | match("v(\\d+).*").captures[0].string | tonumber) | map(max_by(.version | match("v(\\d+\\.\\d+).*").captures[0].string | split(".") as $parts | ($parts[0] | tonumber) * 1000 + ($parts[1] | tonumber))) | map({version: .version, major: (.version | match("v(\\d+).*").captures[0].string | tonumber)})' node_versions_recent.json >versions.json
-
-          # Add platform information to each version
-          platforms_json="["
-          first=true
-
-          while IFS= read -r version_info; do
-              version=$(echo "$version_info" | jq -r '.version')
-              major=$(echo "$version_info" | jq -r '.major')
-              version_without_v="${version#v}" # Remove 'v' prefix for Docker tag
-              platforms=$(check_platforms "$version_without_v")
-
-              if [ "$first" = true ]; then
-                  first=false
-              else
-                  platforms_json="$platforms_json,"
-              fi
-
-              platforms_json="$platforms_json{\"version\":\"$version\",\"major\":$major,\"platforms\":\"$platforms\"}"
-          done < <(jq -c '.[]' versions.json)
-          platforms_json="$platforms_json]"
-
-          echo "$platforms_json" >config.json
-
-      - uses: cloudposse/github-action-jq@main
-        id: latest-version
-        with:
-          compact: true
-          raw-output: true
-          input: config.json
-          script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[0].version'
-
-      - uses: cloudposse/github-action-jq@main
-        id: reparse-tags
-        with:
-          compact: true
-          input: config.json
-          script: '{"tag": . }'
-
-      - run: echo 'matrix=${{ steps.reparse-tags.outputs.output }}' >> $GITHUB_OUTPUT
+      - uses: actions/checkout@v6
+      - name: Select published supported Node images
         id: set-matrix
-
-      # Pick the top 3 major versions for devcontainers
-      - uses: cloudposse/github-action-jq@main
-        id: reparse-dev-tags
-        with:
-          compact: true
-          input: config.json
-          script: 'sort_by(.major) | reverse | group_by(.major) | map(.[0]) | sort_by(.major) | reverse | .[:3] | {"tag": . }'
-
-      - run: echo 'matrix=${{ steps.reparse-dev-tags.outputs.output }}' >> $GITHUB_OUTPUT
-        id: set-dev-matrix
+        run: scripts/prepare-matrix.sh >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare-matrix
     runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
+      fail-fast: false
       matrix: ${{fromJson(needs.prepare-matrix.outputs.matrix)}}
 
     steps:
@@ -134,6 +52,12 @@ jobs:
       - name: Set up Docker Buildx
         id: buildx
         uses: docker/setup-buildx-action@v4
+
+      - name: Build and test runtime permissions
+        run: |
+          NODE_VERSION=${{ matrix.tag.version }}
+          docker build --build-arg NODE_VERSION="${NODE_VERSION#v}" -t betterweb/node:permission-test .
+          tests/permissions.sh betterweb/node:permission-test
 
       - name: Login to Forgejo
         uses: docker/login-action@v4
@@ -178,7 +102,6 @@ jobs:
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:latest', env.FORGEJO_IMAGE) || '' }}
 
       - name: Login to DockerHub
-        continue-on-error: true
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -186,7 +109,6 @@ jobs:
           logout: true
 
       - name: Build and push to DockerHub
-        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           build-args: |
@@ -231,6 +153,7 @@ jobs:
     needs: [prepare-matrix, build]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
+      fail-fast: false
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
       - uses: actions/checkout@v6
@@ -282,7 +205,6 @@ jobs:
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dev', env.FORGEJO_IMAGE) || '' }}
 
       - name: Login to DockerHub
-        continue-on-error: true
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -290,7 +212,6 @@ jobs:
           logout: true
 
       - name: Build and push dev image to DockerHub
-        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -334,6 +255,7 @@ jobs:
     needs: prepare-matrix
     runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
+      fail-fast: false
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
       - uses: actions/checkout@v6
@@ -384,7 +306,6 @@ jobs:
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:devcontainer-latest', env.FORGEJO_IMAGE) || '' }}
 
       - name: Login to DockerHub
-        continue-on-error: true
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -392,7 +313,6 @@ jobs:
           logout: true
 
       - name: Build and push devcontainer image to DockerHub
-        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -436,6 +356,7 @@ jobs:
     needs: [prepare-matrix, build]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     strategy:
+      fail-fast: false
       matrix: ${{fromJson(needs.prepare-matrix.outputs.devcontainer_matrix)}}
     steps:
       - uses: actions/checkout@v6
@@ -487,7 +408,6 @@ jobs:
             ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dind-latest', env.FORGEJO_IMAGE) || '' }}
 
       - name: Login to DockerHub
-        continue-on-error: true
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
@@ -495,7 +415,6 @@ jobs:
           logout: true
 
       - name: Build and push dind image to DockerHub
-        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -542,7 +461,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: manifest-part-*
-          merge-multiple: true
+          merge-multiple: false
           path: parts/
 
       - name: Merge manifest parts
@@ -578,25 +497,10 @@ jobs:
                   })
                 | sort_by(.major) | reverse
               )
-            }' parts/*.json > manifest.json
+            }' parts/*/part.json > manifest.json
           cat manifest.json
 
       - uses: actions/upload-artifact@v4
         with:
           name: manifest
           path: manifest.json
-
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="build-${{ github.run_number }}"
-          TITLE="Build #${{ github.run_number }} — node ${{ needs.prepare-matrix.outputs.latest }}"
-          # Drop existing release+tag if re-running the same workflow.
-          gh release delete "$TAG" -y --cleanup-tag --repo "${{ github.repository }}" 2>/dev/null || true
-          gh release create "$TAG" \
-            --repo "${{ github.repository }}" \
-            --title "$TITLE" \
-            --notes "Auto-generated manifest of betterweb/node multi-arch builds. Fetch latest via: https://github.com/${{ github.repository }}/releases/latest/download/manifest.json" \
-            --latest \
-            manifest.json

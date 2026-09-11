@@ -1,7 +1,6 @@
-ARG NODE_MAJOR=22
-ARG NODE_VERSION=22.0.0
+ARG NODE_VERSION=24
 ARG BASE_IMAGE=betterweb/node
 FROM ${BASE_IMAGE}:${NODE_VERSION} AS builder
 
 COPY install_packages.sh /usr/local/bin/install_packages
-RUN chmod +x /usr/local/bin/install_packages
+RUN chmod 0755 /usr/local/bin/install_packages

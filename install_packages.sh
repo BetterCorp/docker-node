@@ -1,10 +1,9 @@
 #!/bin/sh
-
-function install_packages() {
-    apk add --no-cache --virtual .gyp python make g++ \
-    && npm install $1 \
-    && apk del .gyp
-}
-
-# Call the function with your npm dependencies
-#install_packages "[your npm dependencies here]"
+set -eu
+if [ "$#" -eq 0 ]; then
+  echo 'Usage: install_packages package [package ...]' >&2
+  exit 2
+fi
+apk add --no-cache --virtual .betterweb-gyp python3 make g++
+trap 'apk del .betterweb-gyp' EXIT
+npm install "$@"

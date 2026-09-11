@@ -1,5 +1,4 @@
-ARG NODE_MAJOR=22
-ARG NODE_VERSION=22.0.0
+ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-bookworm
 
 # Install common dev tools
@@ -19,4 +18,4 @@ ARG USER_GID=$USER_UID
 RUN echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
-USER $USERNAME 
+USER $USERNAME

@@ -5,24 +5,24 @@ Better Node.js Docker images with multiple specialized variants for different de
 ## Available Images
 
 ### Base Images
-- `betterweb/node:latest` - Latest stable Node.js on Alpine Linux (currently 24.x)
+- `betterweb/node:latest` - Latest stable Node.js on Alpine Linux (highest published supported major)
 - `betterweb/node:24` - Node.js 24.x (major version)
-- `betterweb/node:24.0.0` - Specific Node.js version
+- `betterweb/node:24.x.y` - Specific Node.js version
 
 ### Development Variants
 - `betterweb/node:dev` - Development image with additional tools (not for production)
 - `betterweb/node:dev-24` - Development image for Node.js 24.x
-- `betterweb/node:dev-24.0.0` - Development image for specific version
+- `betterweb/node:dev-24.x.y` - Development image for specific version
 
 ### DevContainer Variants
 - `betterweb/node:devcontainer-latest` - VS Code DevContainer with development tools
 - `betterweb/node:devcontainer-24` - DevContainer for Node.js 24.x
-- `betterweb/node:devcontainer-24.0.0` - DevContainer for specific version
+- `betterweb/node:devcontainer-24.x.y` - DevContainer for specific version
 
 ### Docker-in-Docker (DIND) Variants
 - `betterweb/node:dind-latest` - Node.js with Docker and Docker Compose support
 - `betterweb/node:dind-24` - DIND for Node.js 24.x
-- `betterweb/node:dind-24.0.0` - DIND for specific version
+- `betterweb/node:dind-24.x.y` - DIND for specific version
 
 ## Usage
 
@@ -49,7 +49,7 @@ docker run -it -p 3000:3000 -v $(pwd):/app -w /app betterweb/node:24 node server
 docker run -it -v $(pwd):/app -w /app betterweb/node:dev-24 bash
 
 # Install packages with native dependencies
-docker run -it -v $(pwd):/app -w /app betterweb/node:dev-24 install_packages "bcrypt sharp"
+docker run -it -v $(pwd):/app -w /app betterweb/node:dev-24 npm install bcrypt sharp
 
 # Run development server with live reload
 docker run -it -p 3000:3000 -v $(pwd):/app -w /app betterweb/node:dev-24 npm run dev
@@ -102,7 +102,7 @@ FROM betterweb/node:dev-24
 WORKDIR /app
 COPY package*.json ./
 # Use install_packages for packages that need compilation
-RUN install_packages "bcrypt canvas sharp"
+RUN install_packages bcrypt canvas sharp
 COPY . .
 CMD ["npm", "run", "dev"]
 ```
@@ -143,7 +143,7 @@ For VS Code DevContainers, use in `.devcontainer/devcontainer.json`:
 ### Development Image (`dev-*`)
 - Built on top of base image
 - Includes `install_packages` script for easy npm package installation with native dependencies
-- Pre-configured build tools (python, make, g++) for compiling native modules
+- `install_packages` temporarily installs Python 3, make and g++ during Docker builds
 - **Not recommended for production use**
 
 ### DevContainer Image (`devcontainer-*`)
@@ -162,8 +162,8 @@ For VS Code DevContainers, use in `.devcontainer/devcontainer.json`:
 ## Version Matrix
 
 Images are built for multiple Node.js versions:
-- **Base images**: All supported Node.js versions (currently 18.x, 20.x, 21.x, 22.x, 23.x, 24.x)
-- **Specialized variants** (dev, devcontainer, dind): Latest 3 major Node.js versions (currently 22.x, 23.x, 24.x)
+- **Base images**: Node.js 24.x and 26.x
+- **Specialized variants** (dev, devcontainer, dind): Node.js 24.x and 26.x
 - **Update schedule**: Monthly on the 1st of each month
 
 ## Architecture Support
@@ -174,7 +174,8 @@ Multi-platform images supporting:
 
 ## Security
 
-- All images run as non-root `node` user by default
+- The base/dev entrypoint drops root to `node` (UID 1000); explicit non-root users are preserved. Dockerfile build steps still run as root.
+- Devcontainers include sudo; DIND is privileged development tooling, not a production security boundary.
 - Regular security updates through automated builds
 - Minimal attack surface with Alpine Linux base (except devcontainer)
 - No secrets or credentials included in images
@@ -200,3 +201,24 @@ This repository contains:
 ## License
 
 This project follows the same license as the official Node.js Docker images.
+
+## Production image policy
+
+BetterCorp applications use `code.bettercorp.dev/bettercorp/docker-node:24`
+(or its `betterweb/node:24` mirror), preserving the custom privilege-dropping
+entrypoint. UUST uses Node 24 LTS; do not replace this with `node:22` or bypass
+the entrypoint. Application files should be root-owned and read-only to the
+runtime user, with writable directories created explicitly when needed.
+`USER node` is supported. These are Unix user/filesystem limits, not Node's
+experimental permission model. Docker image builders must still use the official
+Node image as the upstream source for this BetterCorp image.
+
+The publishing matrix chooses the highest numeric patch with available Alpine
+and Bookworm images for Node 24 and 26. Base images are tested for privilege
+dropping and non-root startup before publishing. The merged manifest is retained
+as a workflow artifact; releases/tags require a separately verified, signed
+maintainer action. DockerHub publication failures fail the workflow rather than
+claiming missing mirror tags were published.
+
+Validate locally with `docker build -t betterweb/node:permission-test .` and
+`tests/permissions.sh betterweb/node:permission-test`.
