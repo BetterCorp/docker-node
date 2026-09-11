@@ -217,8 +217,9 @@ The publishing matrix chooses the highest numeric patch with available Alpine
 and Bookworm images for Node 24 and 26. Base images are tested for privilege
 dropping and non-root startup before publishing. The merged manifest is retained
 as a workflow artifact; releases/tags require a separately verified, signed
-maintainer action. DockerHub publication failures fail the workflow rather than
-claiming missing mirror tags were published.
+maintainer action. DockerHub remains an optional mirror: a rate limit or mirror failure does not
+block the primary registry or dependent images, and the manifest omits mirror
+tags unless their publication succeeded.
 
 Validate locally with `docker build -t betterweb/node:permission-test .` and
 `tests/permissions.sh betterweb/node:permission-test`.
