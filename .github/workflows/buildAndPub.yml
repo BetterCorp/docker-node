@@ -108,19 +108,14 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
-      - name: Build and push to DockerHub
-        uses: docker/build-push-action@v7
-        with:
-          build-args: |
-            NODE_MAJOR=${{ matrix.tag.major }}
-            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
-          context: .
-          platforms: ${{ matrix.tag.platforms }}
-          push: true
-          tags: |
-            ${{ env.DOCKERHUB_IMAGE }}:${{steps.parse_version.outputs.PARSED_VERSION}}
-            ${{ env.DOCKERHUB_IMAGE }}:${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
+      - name: Mirror the built image to DockerHub
+        run: |
+          tags=(--tag "${{ env.DOCKERHUB_IMAGE }}:${{ steps.parse_version.outputs.PARSED_VERSION }}"
+                --tag "${{ env.DOCKERHUB_IMAGE }}:${{ matrix.tag.major }}")
+          if [ "${{ steps.is_latest.outputs.IS_LATEST }}" = true ]; then
+            tags+=(--tag "${{ env.DOCKERHUB_IMAGE }}:latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "${{ env.FORGEJO_IMAGE }}@${{ steps.build_image.outputs.digest }}"
 
       - name: Write manifest part
         run: |
@@ -211,19 +206,14 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
-      - name: Build and push dev image to DockerHub
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.dev
-          push: true
-          build-args: |
-            NODE_MAJOR=${{ matrix.tag.major }}
-            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
-          tags: |
-            ${{ env.DOCKERHUB_IMAGE }}:dev-${{steps.parse_version.outputs.PARSED_VERSION}}
-            ${{ env.DOCKERHUB_IMAGE }}:dev-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dev', env.DOCKERHUB_IMAGE) || '' }}
+      - name: Mirror the built image to DockerHub
+        run: |
+          tags=(--tag "${{ env.DOCKERHUB_IMAGE }}:dev-${{ steps.parse_version.outputs.PARSED_VERSION }}"
+                --tag "${{ env.DOCKERHUB_IMAGE }}:dev-${{ matrix.tag.major }}")
+          if [ "${{ steps.is_latest.outputs.IS_LATEST }}" = true ]; then
+            tags+=(--tag "${{ env.DOCKERHUB_IMAGE }}:dev")
+          fi
+          docker buildx imagetools create "${tags[@]}" "${{ env.FORGEJO_IMAGE }}@${{ steps.build_image.outputs.digest }}"
 
       - name: Write manifest part
         run: |
@@ -312,19 +302,14 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
-      - name: Build and push devcontainer image to DockerHub
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.devcontainer
-          push: true
-          build-args: |
-            NODE_MAJOR=${{ matrix.tag.major }}
-            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
-          tags: |
-            ${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{steps.parse_version.outputs.PARSED_VERSION}}
-            ${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:devcontainer-latest', env.DOCKERHUB_IMAGE) || '' }}
+      - name: Mirror the built image to DockerHub
+        run: |
+          tags=(--tag "${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{ steps.parse_version.outputs.PARSED_VERSION }}"
+                --tag "${{ env.DOCKERHUB_IMAGE }}:devcontainer-${{ matrix.tag.major }}")
+          if [ "${{ steps.is_latest.outputs.IS_LATEST }}" = true ]; then
+            tags+=(--tag "${{ env.DOCKERHUB_IMAGE }}:devcontainer-latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "${{ env.FORGEJO_IMAGE }}@${{ steps.build_image.outputs.digest }}"
 
       - name: Write manifest part
         run: |
@@ -414,19 +399,14 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
           logout: true
 
-      - name: Build and push dind image to DockerHub
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.dind
-          push: true
-          build-args: |
-            NODE_MAJOR=${{ matrix.tag.major }}
-            NODE_VERSION=${{ steps.parse_version.outputs.PARSED_VERSION }}
-          tags: |
-            ${{ env.DOCKERHUB_IMAGE }}:dind-${{steps.parse_version.outputs.PARSED_VERSION}}
-            ${{ env.DOCKERHUB_IMAGE }}:dind-${{matrix.tag.major}}
-            ${{ steps.is_latest.outputs.IS_LATEST == 'true' && format('{0}:dind-latest', env.DOCKERHUB_IMAGE) || '' }}
+      - name: Mirror the built image to DockerHub
+        run: |
+          tags=(--tag "${{ env.DOCKERHUB_IMAGE }}:dind-${{ steps.parse_version.outputs.PARSED_VERSION }}"
+                --tag "${{ env.DOCKERHUB_IMAGE }}:dind-${{ matrix.tag.major }}")
+          if [ "${{ steps.is_latest.outputs.IS_LATEST }}" = true ]; then
+            tags+=(--tag "${{ env.DOCKERHUB_IMAGE }}:dind-latest")
+          fi
+          docker buildx imagetools create "${tags[@]}" "${{ env.FORGEJO_IMAGE }}@${{ steps.build_image.outputs.digest }}"
 
       - name: Write manifest part
         run: |
